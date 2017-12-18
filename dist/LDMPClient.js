@@ -14,15 +14,12 @@ var _formatters = require('./formatters');
 
 var _parsers = require('./parsers');
 
-var _taskQueue = require('@dendra-science/task-queue');
-
-var tq = _interopRequireWildcard(_taskQueue);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 const ACK = Buffer.from('\r');
+
+const DEFAULT_PORT = 1024;
+const DEFAULT_TIMEOUT = 30000;
 
 /**
  * A client class for communicating with a LDMP server over TCP.
@@ -32,27 +29,27 @@ class LDMPClient extends _events.EventEmitter {
     super();
 
     this.options = Object.assign({
-      port: 1024
+      port: DEFAULT_PORT
     }, options);
-
-    this.queue = new tq.TaskQueue();
-    this.parser = new _parsers.FrameParser({
-      matchChar: Buffer.from('\0'),
-      matchEncoding: 'ascii'
-    });
-    this.parser.pipe(new _parsers.XMLRecordParser()).on('data', this._onDataHandler.bind(this));
   }
 
   /**
    * Cancel processing immediately and clean up.
-   *
-   * NOTE: It's recommended to call disconnect first!
    */
-  destroy() {
-    this.queue.destroy();
+  cancel() {
+    if (!this.socket) return;
 
-    this.queue = null;
-    this.parser = null;
+    this.isConnected = false;
+    this.socket.removeAllListeners();
+    this.socket.unpipe();
+    this.socket.destroy();
+    this.socket.unref();
+
+    this.socket = null;
+  }
+
+  destroy() {
+    this.cancel();
   }
 
   _onCloseHandler() {
@@ -61,110 +58,96 @@ class LDMPClient extends _events.EventEmitter {
     this.socket.unpipe();
     this.socket.unref();
 
-    const item = this.queue.head;
-    if (item && item.task === this._disconnectTask) {
-      item.done();
-    }
+    this.emit('closed');
   }
 
-  _onConnectHandler() {
-    this.isConnected = true;
+  _connect() {
+    return new Promise((resolve, reject) => {
+      if (this.isConnected) return resolve();
 
-    const item = this.queue.head;
-    if (item && item.task === this._connectTask) {
-      item.done(this.socket);
-    }
-  }
+      const sock = this.socket = new _net2.default.Socket();
 
-  _onDataHandler(data) {
-    this.emit('record', data);
-  }
+      sock.once('close', this._onCloseHandler.bind(this));
+      sock.once('connect', () => resolve(sock));
+      sock.once('error', reject);
 
-  _onErrorHandler(err) {
-    const item = this.queue.head;
-    if (this.socket.connecting && item && item.task === this._connectTask) {
-      item.error(err);
-    }
-  }
+      sock.pipe(new _parsers.FrameParser({
+        matchChar: Buffer.from('\0'),
+        matchEncoding: 'ascii'
+      })).pipe(new _parsers.XMLRecordParser()).on('data', data => {
+        this.emit('record', data);
+      });
 
-  _connectTask({ data, done, error }) {
-    const client = data.client;
-
-    if (client.isConnected) return done();
-
-    const sock = client.socket = new _net2.default.Socket();
-    sock.once('close', client._onCloseHandler.bind(client));
-    sock.once('connect', client._onConnectHandler.bind(client));
-    sock.once('error', client._onErrorHandler.bind(client));
-    sock.pipe(client.parser);
-    sock.connect(client.options.port, client.options.host);
+      sock.connect(this.options.port, this.options.host);
+    });
   }
 
   /**
    * Open a connection to the LDMP server.
    */
-  connect() {
-    return this.queue.push(this._connectTask, {
-      client: this
+  connect(timeout = DEFAULT_TIMEOUT) {
+    return Promise.race([this._connect(), new Promise((resolve, reject) => setTimeout(reject, timeout, new Error('Connect timeout')))]).then(sock => {
+      this.isConnected = true;
+      this.emit('connected', sock);
+      return sock;
+    }).catch(err => {
+      this.cancel();
+      throw err;
     });
-  }
-
-  _ackTask({ data, done, error }) {
-    const client = data.client;
-
-    if (!client.isConnected) return error(new Error('Not connected'));
-
-    client.socket.write(ACK);
-    done();
   }
 
   /**
    * Send a record acknowledgement to the server.
    */
   ack() {
-    return this.queue.push(this._ackTask, {
-      client: this
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected) return reject(new Error('Not connected'));
+
+      this.socket.write(ACK);
+
+      resolve();
     });
   }
 
-  _disconnectTask({ data, done, error }) {
-    const client = data.client;
+  _disconnect() {
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected) return reject(new Error('Not connected'));
 
-    if (!client.isConnected) return done();
+      const sock = this.socket;
 
-    client.socket.destroy();
+      this.once('closed', () => resolve(sock));
+      sock.destroy();
+    });
   }
 
   /**
    * Close a connection to the LDMP server.
    */
-  disconnect() {
-    return this.queue.push(this._disconnectTask, {
-      client: this
+  disconnect(timeout = DEFAULT_TIMEOUT) {
+    return Promise.race([this._disconnect(), new Promise((resolve, reject) => setTimeout(reject, timeout, new Error('Disconnect timeout')))]).then(sock => {
+      this.emit('disconnected', sock);
+      return sock;
+    }).catch(err => {
+      this.cancel();
+      throw err;
     });
-  }
-
-  _specifyTask({ data, done, error }) {
-    const client = data.client;
-
-    if (!client.isConnected) return error(new Error('Not connected'));
-
-    const spec = _formatters.ClientSpecFormatter.format({
-      output_format: 'xml',
-      tables: data.tables
-    });
-
-    client.socket.write(spec);
-    done(spec.toString());
   }
 
   /**
    * Send a client specification to the server.
    */
   specify(tables) {
-    return this.queue.push(this._specifyTask, {
-      client: this,
-      tables
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected) return reject(new Error('Not connected'));
+
+      const spec = _formatters.ClientSpecFormatter.format({
+        output_format: 'xml',
+        tables
+      });
+
+      this.socket.write(spec);
+
+      resolve(spec.toString());
     });
   }
 }

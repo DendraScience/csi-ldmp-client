@@ -6,7 +6,7 @@ describe('Module', function () {
   this.timeout(60000)
 
   const tables = [{
-    station: 'ucac_angelo',
+    station: 'test_blueoak',
     table: 'TenMin',
     order_option: 'logged-with-holes',
     start_option: 'at-oldest'
@@ -66,7 +66,7 @@ describe('Module', function () {
 
   it('should specify', function () {
     return client.specify(tables).then(res => {
-      expect(res).to.equal('--output-format=xml {ucac_angelo TenMin --order-option=logged-with-holes --start-option=at-oldest} ;\r')
+      expect(res).to.equal('--output-format=xml {test_blueoak TenMin --order-option=logged-with-holes --start-option=at-oldest} ;\r')
     })
   })
 
@@ -74,7 +74,7 @@ describe('Module', function () {
     return new Promise(resolve => {
       setTimeout(() => {
         expect(records.length).to.equal(1)
-        expect(records).to.have.nested.property('0.station', 'ucac_angelo')
+        expect(records).to.have.nested.property('0.station', 'test_blueoak')
         expect(records).to.have.nested.property('0.table', 'TenMin')
         expect(records).to.have.nested.property('0.timeString')
         expect(records).to.have.nested.property('0.fields')
@@ -89,7 +89,7 @@ describe('Module', function () {
     return new Promise(resolve => {
       setTimeout(() => {
         expect(records.length).to.equal(2)
-        expect(records).to.have.nested.property('1.station', 'ucac_angelo')
+        expect(records).to.have.nested.property('1.station', 'test_blueoak')
         expect(records).to.have.nested.property('1.table', 'TenMin')
         expect(records).to.have.nested.property('1.timeString')
         expect(records).to.have.nested.property('1.fields')
@@ -104,7 +104,7 @@ describe('Module', function () {
     return new Promise(resolve => {
       setTimeout(() => {
         expect(records.length).to.equal(3)
-        expect(records).to.have.nested.property('2.station', 'ucac_angelo')
+        expect(records).to.have.nested.property('2.station', 'test_blueoak')
         expect(records).to.have.nested.property('2.table', 'TenMin')
         expect(records).to.have.nested.property('2.timeString')
         expect(records).to.have.nested.property('2.fields')
