@@ -27,6 +27,7 @@ export default class LDMPClient extends EventEmitter {
     if (!this.socket) return
 
     this.isConnected = false
+
     this.socket.removeAllListeners()
     this.socket.unpipe()
     this.socket.destroy()
@@ -41,6 +42,7 @@ export default class LDMPClient extends EventEmitter {
 
   _onCloseHandler () {
     this.isConnected = false
+
     this.socket.removeAllListeners()
     this.socket.unpipe()
     this.socket.unref()
@@ -54,8 +56,10 @@ export default class LDMPClient extends EventEmitter {
 
       const sock = this.socket = new net.Socket()
 
-      sock.once('close', this._onCloseHandler.bind(this))
-      sock.once('connect', () => resolve(sock))
+      sock.once('connect', () => {
+        sock.removeAllListeners()
+        resolve(sock)
+      })
       sock.once('error', reject)
 
       sock.pipe(new FrameParser({
@@ -78,6 +82,7 @@ export default class LDMPClient extends EventEmitter {
       new Promise((resolve, reject) => setTimeout(reject, timeout, new Error('Connect timeout')))
     ]).then(sock => {
       this.isConnected = true
+      sock.once('close', this._onCloseHandler.bind(this))
       this.emit('connected', sock)
       return sock
     }).catch(err => {
@@ -106,6 +111,8 @@ export default class LDMPClient extends EventEmitter {
       const sock = this.socket
 
       this.once('closed', () => resolve(sock))
+      sock.once('error', reject)
+
       sock.destroy()
     })
   }
