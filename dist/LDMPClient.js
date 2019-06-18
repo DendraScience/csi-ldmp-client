@@ -40,6 +40,7 @@ class LDMPClient extends _events.EventEmitter {
     if (!this.socket) return;
 
     this.isConnected = false;
+
     this.socket.removeAllListeners();
     this.socket.unpipe();
     this.socket.destroy();
@@ -54,6 +55,7 @@ class LDMPClient extends _events.EventEmitter {
 
   _onCloseHandler() {
     this.isConnected = false;
+
     this.socket.removeAllListeners();
     this.socket.unpipe();
     this.socket.unref();
@@ -67,8 +69,10 @@ class LDMPClient extends _events.EventEmitter {
 
       const sock = this.socket = new _net2.default.Socket();
 
-      sock.once('close', this._onCloseHandler.bind(this));
-      sock.once('connect', () => resolve(sock));
+      sock.once('connect', () => {
+        sock.removeAllListeners();
+        resolve(sock);
+      });
       sock.once('error', reject);
 
       sock.pipe(new _parsers.FrameParser({
@@ -88,6 +92,7 @@ class LDMPClient extends _events.EventEmitter {
   connect(timeout = DEFAULT_TIMEOUT) {
     return Promise.race([this._connect(), new Promise((resolve, reject) => setTimeout(reject, timeout, new Error('Connect timeout')))]).then(sock => {
       this.isConnected = true;
+      sock.once('close', this._onCloseHandler.bind(this));
       this.emit('connected', sock);
       return sock;
     }).catch(err => {
@@ -116,6 +121,8 @@ class LDMPClient extends _events.EventEmitter {
       const sock = this.socket;
 
       this.once('closed', () => resolve(sock));
+      sock.once('error', reject);
+
       sock.destroy();
     });
   }

@@ -27,14 +27,18 @@ class FrameParser extends _stream.Transform {
     let i;
     let s = 0;
 
-    this._buf = this._buf ? Buffer.concat([this._buf, chunk], this._buf.length + chunk.length) : chunk;
+    try {
+      this._buf = this._buf ? Buffer.concat([this._buf, chunk], this._buf.length + chunk.length) : chunk;
 
-    while ((i = this._buf.indexOf(this.matchChar, s, this.matchEncoding)) > -1) {
-      if (i > s) this.push({ frame: this._buf.slice(s, i) });
-      s = i + this.matchChar.length;
+      while ((i = this._buf.indexOf(this.matchChar, s, this.matchEncoding)) > -1) {
+        if (i > s) this.push({ frame: this._buf.slice(s, i) });
+        s = i + this.matchChar.length;
+      }
+
+      this._buf = s < this._buf.length ? this._buf.slice(s, this._buf.length) : null;
+    } catch (err) {
+      console.log('Error [FrameParser._transform]:', { err });
     }
-
-    this._buf = s < this._buf.length ? this._buf.slice(s, this._buf.length) : null;
 
     callback();
   }
@@ -65,51 +69,55 @@ class XMLRecordParser extends _stream.Transform {
     const errors = [];
     const obj = {};
 
-    const xmlDoc = new _xmldom.DOMParser({
-      errorHandler: {
-        error(msg) {
-          errors.push(msg);
+    try {
+      const xmlDoc = new _xmldom.DOMParser({
+        errorHandler: {
+          error(msg) {
+            errors.push(msg);
+          }
+        }
+      }).parseFromString(chunk.frame.toString(), 'text/xml');
+
+      const recordEls = xmlDoc.getElementsByTagName('record');
+
+      for (let i = 0; i < recordEls.length; i++) {
+        const recordEl = recordEls[i];
+
+        assignIntAttr(recordEl, 'record-no', obj, 'recordNumber');
+        assignStrAttr(recordEl, 'station', obj);
+        assignStrAttr(recordEl, 'table', obj);
+        assignStrAttr(recordEl, 'time', obj, 'timeString');
+
+        obj.fields = [];
+
+        const fieldEls = recordEl.getElementsByTagName('field');
+
+        for (let j = 0; j < fieldEls.length; j++) {
+          const fieldEl = fieldEls[j];
+          const field = {
+            name: `col_${j + 1}`
+          };
+
+          assignStrAttr(fieldEl, 'name', field);
+          assignStrAttr(fieldEl, 'process', field);
+          assignStrAttr(fieldEl, 'type', field);
+          assignStrAttr(fieldEl, 'units', field);
+
+          const nd = fieldEl.firstChild;
+          if (nd) {
+            const val = nd.nodeValue;
+            field.value = val > '' ? parseFloat(val) : null;
+          }
+
+          obj.fields.push(field);
         }
       }
-    }).parseFromString(chunk.frame.toString(), 'text/xml');
 
-    const recordEls = xmlDoc.getElementsByTagName('record');
-
-    for (let i = 0; i < recordEls.length; i++) {
-      const recordEl = recordEls[i];
-
-      assignIntAttr(recordEl, 'record-no', obj, 'recordNumber');
-      assignStrAttr(recordEl, 'station', obj);
-      assignStrAttr(recordEl, 'table', obj);
-      assignStrAttr(recordEl, 'time', obj, 'timeString');
-
-      obj.fields = [];
-
-      const fieldEls = recordEl.getElementsByTagName('field');
-
-      for (let j = 0; j < fieldEls.length; j++) {
-        const fieldEl = fieldEls[j];
-        const field = {
-          name: `col_${j + 1}`
-        };
-
-        assignStrAttr(fieldEl, 'name', field);
-        assignStrAttr(fieldEl, 'process', field);
-        assignStrAttr(fieldEl, 'type', field);
-        assignStrAttr(fieldEl, 'units', field);
-
-        const nd = fieldEl.firstChild;
-        if (nd) {
-          const val = nd.nodeValue;
-          field.value = val > '' ? parseFloat(val) : null;
-        }
-
-        obj.fields.push(field);
-      }
+      if (errors.length > 0) obj.parseErrors = errors;
+      if (Object.keys(obj).length > 0) this.push(obj);
+    } catch (err) {
+      console.log('Error [XMLRecordParser._transform]:', { err, obj });
     }
-
-    if (errors.length > 0) obj.parseErrors = errors;
-    if (Object.keys(obj).length > 0) this.push(obj);
 
     callback();
   }
