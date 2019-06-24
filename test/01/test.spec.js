@@ -2,7 +2,7 @@
  * Main tests
  */
 
-describe('Module', function () {
+describe.skip('Module', function () {
   this.timeout(60000)
 
   const tables = [{

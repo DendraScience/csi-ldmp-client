@@ -19,6 +19,8 @@ export class FrameParser extends Transform {
     let i
     let s = 0
 
+    // console.log('FrameParser._transform chunk', chunk)
+
     try {
       this._buf = this._buf ? Buffer.concat([this._buf, chunk], this._buf.length + chunk.length) : chunk
 
@@ -60,6 +62,8 @@ export class XMLRecordParser extends Transform {
   _transform (chunk, encoding, callback) {
     const errors = []
     const obj = {}
+
+    // console.log('XMLRecordParser._transform chunk', chunk)
 
     try {
       const xmlDoc = new DOMParser({

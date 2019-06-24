@@ -27,6 +27,8 @@ class FrameParser extends _stream.Transform {
     let i;
     let s = 0;
 
+    // console.log('FrameParser._transform chunk', chunk)
+
     try {
       this._buf = this._buf ? Buffer.concat([this._buf, chunk], this._buf.length + chunk.length) : chunk;
 
@@ -68,6 +70,8 @@ class XMLRecordParser extends _stream.Transform {
   _transform(chunk, encoding, callback) {
     const errors = [];
     const obj = {};
+
+    // console.log('XMLRecordParser._transform chunk', chunk)
 
     try {
       const xmlDoc = new _xmldom.DOMParser({

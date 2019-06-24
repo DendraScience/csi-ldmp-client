@@ -16,6 +16,8 @@ var _parsers = require('./parsers');
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+// import {FrameParser} from './parsers'
+
 const ACK = Buffer.from('\r');
 
 const DEFAULT_PORT = 1024;
@@ -70,17 +72,34 @@ class LDMPClient extends _events.EventEmitter {
       const sock = this.socket = new _net2.default.Socket();
 
       sock.once('connect', () => {
+        console.log('LDMPClient connect!');
+
         sock.removeAllListeners();
+
+        sock.pipe(new _parsers.FrameParser({
+          matchChar: Buffer.from('\0'),
+          matchEncoding: 'ascii'
+        })).pipe(new _parsers.XMLRecordParser()).on('data', data => {
+          this.emit('record', data);
+        });
+
+        // sock.pipe(new FrameParser({
+        //   matchChar: Buffer.from('\0'),
+        //   matchEncoding: 'ascii'
+        // })).on('data', data => {
+        //   this.emit('record', data.frame.toString())
+        // })
+
         resolve(sock);
       });
       sock.once('error', reject);
 
-      sock.pipe(new _parsers.FrameParser({
-        matchChar: Buffer.from('\0'),
-        matchEncoding: 'ascii'
-      })).pipe(new _parsers.XMLRecordParser()).on('data', data => {
-        this.emit('record', data);
-      });
+      // sock.pipe(new FrameParser({
+      //   matchChar: Buffer.from('\0'),
+      //   matchEncoding: 'ascii'
+      // })).pipe(new XMLRecordParser()).on('data', data => {
+      //   this.emit('record', data)
+      // })
 
       sock.connect(this.options.port, this.options.host);
     });
@@ -106,11 +125,20 @@ class LDMPClient extends _events.EventEmitter {
    */
   ack() {
     return new Promise((resolve, reject) => {
+      if (!this.isConnected) console.log('LDMPClient ack not connected');
       if (!this.isConnected) return reject(new Error('Not connected'));
 
-      this.socket.write(ACK);
+      try {
+        this.socket.write(ACK);
 
-      resolve();
+        console.log('LDMPClient ack sent');
+
+        resolve();
+      } catch (err) {
+        console.log('LDMPClient ack error', err);
+
+        reject(err);
+      }
     });
   }
 
@@ -151,6 +179,8 @@ class LDMPClient extends _events.EventEmitter {
         output_format: 'xml',
         tables
       });
+
+      console.log('LDMPClient specify', `${spec}`);
 
       this.socket.write(spec);
 
