@@ -2,19 +2,25 @@
  * Main tests
  */
 
-describe.skip('Module', function () {
+describe('Module', function () {
   this.timeout(60000)
 
-  const tables = [{
-    station: 'test_blueoak',
-    table: 'TenMin',
-    order_option: 'logged-with-holes',
-    start_option: 'at-oldest'
-  }]
+  const tables = [
+    {
+      station: 'ucbo_blueoak',
+      table: 'TenMin',
+      order_option: 'logged-with-holes',
+      start_option: 'at-oldest'
+    }
+  ]
   const records = []
   const errors = []
   let ldmp
   let client
+
+  after(function () {
+    return client.disconnect()
+  })
 
   it('should import', function () {
     ldmp = require('../../dist')
@@ -26,27 +32,33 @@ describe.skip('Module', function () {
     const f = require('../../dist/formatters')
     const buf = f.ClientSpecFormatter.format({
       output_format: 'xml',
-      tables: [{
-        station: 'HelloKitty',
-        table: 'Meow',
-        order_option: 'logged-with-holes',
-        start_option: 'at-time',
-        time_stamp: '1 jan 1990'
-      }, {
-        station: 'Cartman',
-        table: 'CheesyPoof',
-        order_option: 'logged-with-holes',
-        start_option: 'relative-to-newest',
-        backfill_seconds: 3000
-      }, {
-        station: 'Homer',
-        table: 'Doh',
-        order_option: 'logged-with-holes',
-        start_option: 'at-newest'
-      }]
+      tables: [
+        {
+          station: 'HelloKitty',
+          table: 'Meow',
+          order_option: 'logged-with-holes',
+          start_option: 'at-time',
+          time_stamp: '1 jan 1990'
+        },
+        {
+          station: 'Cartman',
+          table: 'CheesyPoof',
+          order_option: 'logged-with-holes',
+          start_option: 'relative-to-newest',
+          backfill_seconds: 3000
+        },
+        {
+          station: 'Homer',
+          table: 'Doh',
+          order_option: 'logged-with-holes',
+          start_option: 'at-newest'
+        }
+      ]
     })
 
-    expect(buf.toString()).to.equal('--output-format=xml {HelloKitty Meow --order-option=logged-with-holes --start-option={at-time {1 jan 1990}}} {Cartman CheesyPoof --order-option=logged-with-holes --start-option={relative-to-newest 3000}} {Homer Doh --order-option=logged-with-holes --start-option=at-newest} ;\r')
+    expect(buf.toString()).to.equal(
+      '--output-format=xml {HelloKitty Meow --order-option=logged-with-holes --start-option={at-time {1 jan 1990}}} {Cartman CheesyPoof --order-option=logged-with-holes --start-option={relative-to-newest 3000}} {Homer Doh --order-option=logged-with-holes --start-option=at-newest} ;\r'
+    )
   })
 
   it('should create client', function () {
@@ -66,7 +78,9 @@ describe.skip('Module', function () {
 
   it('should specify', function () {
     return client.specify(tables).then(res => {
-      expect(res).to.equal('--output-format=xml {test_blueoak TenMin --order-option=logged-with-holes --start-option=at-oldest} ;\r')
+      expect(res).to.equal(
+        '--output-format=xml {ucbo_blueoak TenMin --order-option=logged-with-holes --start-option=at-oldest} ;\r'
+      )
     })
   })
 
@@ -74,7 +88,7 @@ describe.skip('Module', function () {
     return new Promise(resolve => {
       setTimeout(() => {
         expect(records.length).to.equal(1)
-        expect(records).to.have.nested.property('0.station', 'test_blueoak')
+        expect(records).to.have.nested.property('0.station', 'ucbo_blueoak')
         expect(records).to.have.nested.property('0.table', 'TenMin')
         expect(records).to.have.nested.property('0.timeString')
         expect(records).to.have.nested.property('0.fields')
@@ -89,7 +103,7 @@ describe.skip('Module', function () {
     return new Promise(resolve => {
       setTimeout(() => {
         expect(records.length).to.equal(2)
-        expect(records).to.have.nested.property('1.station', 'test_blueoak')
+        expect(records).to.have.nested.property('1.station', 'ucbo_blueoak')
         expect(records).to.have.nested.property('1.table', 'TenMin')
         expect(records).to.have.nested.property('1.timeString')
         expect(records).to.have.nested.property('1.fields')
@@ -104,7 +118,7 @@ describe.skip('Module', function () {
     return new Promise(resolve => {
       setTimeout(() => {
         expect(records.length).to.equal(3)
-        expect(records).to.have.nested.property('2.station', 'test_blueoak')
+        expect(records).to.have.nested.property('2.station', 'ucbo_blueoak')
         expect(records).to.have.nested.property('2.table', 'TenMin')
         expect(records).to.have.nested.property('2.timeString')
         expect(records).to.have.nested.property('2.fields')

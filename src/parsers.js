@@ -1,37 +1,42 @@
 /**
  * A set of transform streams to aid in the parsing of records.
  */
-import {DOMParser} from 'xmldom'
-import {Transform} from 'stream'
+import { DOMParser } from 'xmldom'
+import { Transform } from 'stream'
 
 export class FrameParser extends Transform {
-  constructor (options) {
-    super(Object.assign({}, options, {
-      readableObjectMode: true,
-      writableObjectMode: false
-    }))
+  constructor(options) {
+    super(
+      Object.assign({}, options, {
+        readableObjectMode: true,
+        writableObjectMode: false
+      })
+    )
 
     this.matchChar = options.matchChar
     this.matchEncoding = options.matchEncoding
   }
 
-  _transform (chunk, encoding, callback) {
+  _transform(chunk, encoding, callback) {
     let i
     let s = 0
 
-    // console.log('FrameParser._transform chunk', chunk)
-
     try {
-      this._buf = this._buf ? Buffer.concat([this._buf, chunk], this._buf.length + chunk.length) : chunk
+      this._buf = this._buf
+        ? Buffer.concat([this._buf, chunk], this._buf.length + chunk.length)
+        : chunk
 
-      while ((i = this._buf.indexOf(this.matchChar, s, this.matchEncoding)) > -1) {
-        if (i > s) this.push({frame: this._buf.slice(s, i)})
+      while (
+        (i = this._buf.indexOf(this.matchChar, s, this.matchEncoding)) > -1
+      ) {
+        if (i > s) this.push({ frame: this._buf.slice(s, i) })
         s = i + this.matchChar.length
       }
 
-      this._buf = s < this._buf.length ? this._buf.slice(s, this._buf.length) : null
+      this._buf =
+        s < this._buf.length ? this._buf.slice(s, this._buf.length) : null
     } catch (err) {
-      console.log('Error [FrameParser._transform]:', { err })
+      console.error('Error [FrameParser._transform]:', { err })
     }
 
     callback()
@@ -42,33 +47,33 @@ export class FrameParser extends Transform {
  * Helpers for getting and casting attributes.
  */
 
-function assignIntAttr (el, name, obj, prop) {
+function assignIntAttr(el, name, obj, prop) {
   const val = el.getAttribute(name)
   if (val > '') obj[prop || name] = val | 0
 }
 
-function assignStrAttr (el, name, obj, prop) {
+function assignStrAttr(el, name, obj, prop) {
   const val = el.getAttribute(name)
   if (val > '') obj[prop || name] = val
 }
 
 export class XMLRecordParser extends Transform {
-  constructor (options) {
-    super(Object.assign({}, options, {
-      objectMode: true
-    }))
+  constructor(options) {
+    super(
+      Object.assign({}, options, {
+        objectMode: true
+      })
+    )
   }
 
-  _transform (chunk, encoding, callback) {
+  _transform(chunk, encoding, callback) {
     const errors = []
     const obj = {}
-
-    // console.log('XMLRecordParser._transform chunk', chunk)
 
     try {
       const xmlDoc = new DOMParser({
         errorHandler: {
-          error (msg) {
+          error(msg) {
             errors.push(msg)
           }
         }
@@ -112,7 +117,7 @@ export class XMLRecordParser extends Transform {
       if (errors.length > 0) obj.parseErrors = errors
       if (Object.keys(obj).length > 0) this.push(obj)
     } catch (err) {
-      console.log('Error [XMLRecordParser._transform]:', { err, obj })
+      console.error('Error [XMLRecordParser._transform]:', { err, obj })
     }
 
     callback()
